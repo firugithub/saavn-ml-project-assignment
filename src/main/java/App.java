@@ -1,5 +1,7 @@
 
 
+import java.sql.Date;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.api.java.function.ForeachFunction;
@@ -13,6 +15,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.DataType;
 
 public class App {
 
@@ -26,14 +29,45 @@ public class App {
 		SparkSession spark = SparkSession.builder().appName("KMeansCluster").master("local").getOrCreate();
 
 		// Loads data
-		Dataset<Row> rawDataset = spark.read().option("header", "true").csv("Data/sample100mb.csv");
-		rawDataset.show();
+		Dataset<Row> rawDataset = spark.read().option("header", "true").csv("Data/sample100mb.csv")
+			.toDF("user_id","timestamp","song_id","date_col");
+		//rawDataset.show();
 
+			
 		// Ignore rows having null values
 		Dataset<Row> datasetClean = rawDataset.na().drop();
+		//datasetClean.show();
+		datasetClean.printSchema();
+		
+		datasetClean.withColumn("modified",functions.date_format(functions.to_date(datasetClean.col("date_col"), "yyyymmdd"), "yyyy-MM-dd")).show();
+		
+		//datasetClean.withColumn("test123", functions.unix_timestamp(functions.to_date(datasetClean.col("date_col"),"yyyy-mm-dd"),"yyyy-mm-dd").cast("timestamp")).show();
+		
+		/*datasetClean = datasetClean.withColumn("timestamp", functions.to_date(datasetClean.col("date_col")));
+		datasetClean.printSchema();
+		datasetClean.show();*/
+		
+		
+		/*datasetClean = datasetClean.withColumn("date_col", functions.to_date(datasetClean.col("date_col")));
+		datasetClean.printSchema();
 		datasetClean.show();
+		*/
+		/*datasetClean = datasetClean.withColumn("date_col", functions.date_format(datasetClean.col("date_col"), "yyyy-mm-dd").cast("date"));
+		datasetClean.printSchema();
+		datasetClean.show();*/
+		
+		/*datasetClean = datasetClean.withColumn("date_test", functions.date_format(datasetClean.col("date_test"), "yyyy-mm-dd").cast("date"));
+		datasetClean.printSchema();
+		datasetClean.show();*/
+		
+		/*Dataset<Row> dsDateConv = datasetClean.withColumn("date1",functions.current_date().cast("date"));
+		dsDateConv.show();*/
+		
+		/*Dataset<Row> datasetRetail = datasetClean.withColumn("DaysBefore", functions.datediff(
+			functions.current_date(),datasetClean.col("date_col")));
+		datasetRetail.show();*/
 
-		// Adding Total Price Column
+		/*// Adding Total Price Column
 		// Total Price = Quantity * UnitPrice
 		Column totalPrice = datasetClean.col("Quantity").multiply(datasetClean.col("UnitPrice"));
 		Dataset<Row> datasetTotPrice = datasetClean.withColumn("Total_Price", totalPrice);
@@ -96,7 +130,7 @@ public class App {
 		System.out.println("Cluster Centers: ");
 		for (Vector center : centers) {	
 			System.out.println(center);
-		}
+		}*/
 		spark.stop();
 	}
 }	
