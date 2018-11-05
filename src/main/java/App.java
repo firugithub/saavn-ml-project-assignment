@@ -20,7 +20,7 @@ import org.apache.spark.sql.types.DataType;
 public class App {
 
 	public static void main(String[] args) {
-		
+	    	System.setProperty("hadoop.home.dir", "C:\\winutils");
 		Logger.getLogger("org").setLevel(Level.ERROR);
 		Logger.getLogger("akka").setLevel(Level.ERROR);
 
@@ -39,30 +39,14 @@ public class App {
 		//datasetClean.show();
 		datasetClean.printSchema();
 		
-		datasetClean.withColumn("modified",functions.date_format(functions.to_date(datasetClean.col("date_col"), "yyyymmdd"), "yyyy-MM-dd")).show();
-		
-		//datasetClean.withColumn("test123", functions.unix_timestamp(functions.to_date(datasetClean.col("date_col"),"yyyy-mm-dd"),"yyyy-mm-dd").cast("timestamp")).show();
-		
-		/*datasetClean = datasetClean.withColumn("timestamp", functions.to_date(datasetClean.col("date_col")));
-		datasetClean.printSchema();
-		datasetClean.show();*/
-		
-		
-		/*datasetClean = datasetClean.withColumn("date_col", functions.to_date(datasetClean.col("date_col")));
-		datasetClean.printSchema();
+		datasetClean = datasetClean.withColumn("modified_date",functions.date_format(functions.to_date(datasetClean.col("date_col"), "yyyymmdd"), "yyyy-MM-dd"));
 		datasetClean.show();
-		*/
-		/*datasetClean = datasetClean.withColumn("date_col", functions.date_format(datasetClean.col("date_col"), "yyyy-mm-dd").cast("date"));
-		datasetClean.printSchema();
-		datasetClean.show();*/
 		
-		/*datasetClean = datasetClean.withColumn("date_test", functions.date_format(datasetClean.col("date_test"), "yyyy-mm-dd").cast("date"));
-		datasetClean.printSchema();
-		datasetClean.show();*/
-		
-		/*Dataset<Row> dsDateConv = datasetClean.withColumn("date1",functions.current_date().cast("date"));
-		dsDateConv.show();*/
-		
+		Dataset<Row> datasetRetail = datasetClean.withColumn("DaysBefore", functions.datediff(
+			functions.current_date(),
+			datasetClean.col("modified_date")));
+		datasetRetail.show();
+	
 		/*Dataset<Row> datasetRetail = datasetClean.withColumn("DaysBefore", functions.datediff(
 			functions.current_date(),datasetClean.col("date_col")));
 		datasetRetail.show();*/
