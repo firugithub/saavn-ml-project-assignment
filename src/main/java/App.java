@@ -1,21 +1,14 @@
-
-
-import java.sql.Date;
+package com.upgrad.saavn;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.apache.spark.api.java.function.ForeachFunction;
+import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.ml.clustering.KMeans;
 import org.apache.spark.ml.clustering.KMeansModel;
-import org.apache.spark.ml.evaluation.ClusteringEvaluator;
-import org.apache.spark.ml.feature.VectorAssembler;
-import org.apache.spark.ml.linalg.Vector;
-import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
-import org.apache.spark.sql.types.DataType;
 
 public class App {
 
@@ -42,61 +35,37 @@ public class App {
 		datasetClean = datasetClean.withColumn("modified_date",functions.date_format(functions.to_date(datasetClean.col("date_col"), "yyyymmdd"), "yyyy-MM-dd"));
 		datasetClean.show();
 		
-		Dataset<Row> datasetRetail = datasetClean.withColumn("DaysBefore", functions.datediff(
+		Dataset<Row> datasetdbf = datasetClean.withColumn("last_lisen", functions.datediff(
 			functions.current_date(),
 			datasetClean.col("modified_date")));
-		datasetRetail.show();
-	
-		/*Dataset<Row> datasetRetail = datasetClean.withColumn("DaysBefore", functions.datediff(
-			functions.current_date(),datasetClean.col("date_col")));
-		datasetRetail.show();*/
-
-		/*// Adding Total Price Column
-		// Total Price = Quantity * UnitPrice
-		Column totalPrice = datasetClean.col("Quantity").multiply(datasetClean.col("UnitPrice"));
-		Dataset<Row> datasetTotPrice = datasetClean.withColumn("Total_Price", totalPrice);
-		datasetTotPrice.show();
+		datasetdbf.show();
 		
-		// Convert all timestamps into dd/MM/yy HH:mm format 01/12/10 8:26:00 AM
-		// Calculate RFM attributes : Recency, Frequency and Monetary Values
-		Dataset<Row> datasetRetail = datasetTotPrice.withColumn("DaysBefore", functions.datediff(
-				functions.current_timestamp(),
-				functions.unix_timestamp(datasetTotPrice.col("InvoiceDate"), "MM/dd/yyyy HH:mm").cast("timestamp")));
-		datasetRetail.show();
-
 		// Recency
-		Dataset<Row> datasetRecency = datasetRetail.groupBy("CustomerID")
-				.agg(functions.min("DaysBefore").alias("Recency"));
+		Dataset<Row> datasetRecency = datasetdbf.groupBy("user_id")
+				.agg(functions.min("last_lisen").alias("recency"));
 		datasetRecency.show();
 		
 		// Frequency
-		Dataset<Row> datasetFreq = datasetRetail.groupBy("CustomerID", "InvoiceNo").count().groupBy("CustomerID")
-				.agg(functions.count("*").alias("Frequency"));
+		Dataset<Row> datasetFreq = datasetdbf.groupBy("user_id", "date_col").count().groupBy("user_id")
+				.agg(functions.count("*").alias("frequency"));
 		datasetFreq.show();
 		
-		// Monetary
-		Dataset<Row> datasetMon = datasetRetail.groupBy("CustomerID")
-				.agg(functions.round(functions.sum("Total_Price"), 2).alias("Monetary"));
-		datasetMon.show();
-
-		Dataset<Row> datasetMf = datasetMon
-				.join(datasetFreq, datasetMon.col("CustomerID").equalTo(datasetFreq.col("CustomerID")), "inner")
-				.drop(datasetFreq.col("CustomerID"));
+		//Year
+	
+		
+		Dataset<Row> datasetMf = datasetRecency
+				.join(datasetFreq, datasetRecency.col("user_id").equalTo(datasetFreq.col("user_id")), "inner")
+				.drop(datasetFreq.col("user_id"));
 		datasetMf.show();	
 		
-		Dataset<Row> datasetRfm1 = datasetMf
-				.join(datasetRecency, datasetRecency.col("CustomerID").equalTo(datasetMf.col("CustomerID")), "inner")
-				.drop(datasetFreq.col("CustomerID"));
-		datasetRfm1.show();
-		
 		VectorAssembler assembler = new VectorAssembler()
-				  .setInputCols(new String[] {"Monetary", "Frequency", "Recency"}).setOutputCol("features");
+				  .setInputCols(new String[] {"recency", "frequency"}).setOutputCol("features");
 				
-		Dataset<Row> datasetRfm = assembler.transform(datasetRfm1);
+		Dataset<Row> datasetRfm = assembler.transform(datasetMf);
 		datasetRfm.show();
 		 
 		// Trains a k-means model
-		KMeans kmeans = new KMeans().setK(3);
+		KMeans kmeans = new KMeans().setK(30);
 		KMeansModel model = kmeans.fit(datasetRfm);
 		
 		// Make predictions
@@ -104,11 +73,9 @@ public class App {
 		predictions.show(200);
 		
 		// Evaluate clustering by computing Silhouette score
-		ClusteringEvaluator evaluator = new ClusteringEvaluator();
-
+		/*ClusteringEvaluator evaluator = new ClusteringEvaluator();
 		double silhouette = evaluator.evaluate(predictions);
 		System.out.println("Silhouette with squared euclidean distance = " + silhouette);
-
 		// Shows the result
 		Vector[] centers = model.clusterCenters();
 		System.out.println("Cluster Centers: ");
