@@ -1,3 +1,4 @@
+package com.upgrad.saavn;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.ml.feature.VectorAssembler;
@@ -25,16 +26,17 @@ public class App {
 		//rawDataset.show();
 
 		//Load newmetadata -- artist dataset
-		Dataset<Row> artistDataset = spark.read().option("header", "true").csv("D:\\cloudera_share\\saavn_ml_project_files\\newmetadata")
+		//D:\\cloudera_share\\saavn_ml_project_files\\newmetadata
+		Dataset<Row> artistDataset = spark.read().option("header", "true").csv("C:\\VirtualD\\saavn_ml_project_files\\newmetadata")
 			.toDF("song_id","artist_id");
 		artistDataset.show();
 		
-		Dataset<Row> datasetFreq = artistDataset.groupBy("song_id").count().groupBy("song_id")
+		/*Dataset<Row> datasetFreq = artistDataset.groupBy("song_id").count().groupBy("song_id")
 			.agg(functions.count("*").alias("frequency"));
-		datasetFreq.show();
+		datasetFreq.show();*/
 		
 		// Ignore rows having null values
-		/*Dataset<Row> datasetClean = rawDataset.na().drop();
+		Dataset<Row> datasetClean = rawDataset.na().drop();
 		//datasetClean.show();
 		datasetClean.printSchema();
 		
@@ -46,6 +48,9 @@ public class App {
 			datasetClean.col("modified_date")));
 		datasetdbf.show();
 		
+		
+		
+		
 		// Recency
 		Dataset<Row> datasetRecency = datasetdbf.groupBy("user_id")
 				.agg(functions.min("last_lisen").alias("recency"));
@@ -56,18 +61,21 @@ public class App {
 				.agg(functions.count("*").alias("frequency"));
 		datasetFreq.show();
 		
-		//Year
-	
-		
 		Dataset<Row> datasetMf = datasetRecency
 				.join(datasetFreq, datasetRecency.col("user_id").equalTo(datasetFreq.col("user_id")), "inner")
 				.drop(datasetFreq.col("user_id"));
 		datasetMf.show();	
 		
+		Dataset<Row> datasetwithsong = datasetMf
+				.join(datasetdbf, datasetMf.col("user_id").equalTo(datasetdbf.col("user_id")), "inner")
+				.drop(datasetdbf.col("user_id"));
+		datasetwithsong.show();	
+		
+		
 		VectorAssembler assembler = new VectorAssembler()
-				  .setInputCols(new String[] {"recency", "frequency"}).setOutputCol("features");
+				  .setInputCols(new String[] {"song_id","recency", "frequency","modified_date","last_lisen"}).setOutputCol("features");
 				
-		Dataset<Row> datasetRfm = assembler.transform(datasetMf);
+		Dataset<Row> datasetRfm = assembler.transform(datasetwithsong);
 		datasetRfm.show();
 		 
 		// Trains a k-means model
@@ -76,7 +84,13 @@ public class App {
 		
 		// Make predictions
 		Dataset<Row> predictions = model.transform(datasetRfm);
-		predictions.show(200);*/
+		predictions.show(200);
+		
+		
+		Dataset<Row> predictionswithArtist = predictions
+				.join(artistDataset, predictions.col("song_id").equalTo(artistDataset.col("song_id")), "inner")
+				.drop(artistDataset.col("song_id"));
+		predictionswithArtist.show();	
 		
 		// Evaluate clustering by computing Silhouette score
 		/*ClusteringEvaluator evaluator = new ClusteringEvaluator();
