@@ -1,5 +1,3 @@
-package com.upgrad.saavn;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.ml.feature.VectorAssembler;
@@ -22,13 +20,21 @@ public class App {
 		SparkSession spark = SparkSession.builder().appName("KMeansCluster").master("local").getOrCreate();
 
 		// Loads data
-		Dataset<Row> rawDataset = spark.read().option("header", "true").csv("Data/sample100mb.csv")
+		Dataset<Row> rawDataset = spark.read().option("header", "true").csv("Data/")
 			.toDF("user_id","timestamp","song_id","date_col");
 		//rawDataset.show();
 
-			
+		//Load newmetadata -- artist dataset
+		Dataset<Row> artistDataset = spark.read().option("header", "true").csv("D:\\cloudera_share\\saavn_ml_project_files\\newmetadata")
+			.toDF("song_id","artist_id");
+		artistDataset.show();
+		
+		Dataset<Row> datasetFreq = artistDataset.groupBy("song_id").count().groupBy("song_id")
+			.agg(functions.count("*").alias("frequency"));
+		datasetFreq.show();
+		
 		// Ignore rows having null values
-		Dataset<Row> datasetClean = rawDataset.na().drop();
+		/*Dataset<Row> datasetClean = rawDataset.na().drop();
 		//datasetClean.show();
 		datasetClean.printSchema();
 		
@@ -70,7 +76,7 @@ public class App {
 		
 		// Make predictions
 		Dataset<Row> predictions = model.transform(datasetRfm);
-		predictions.show(200);
+		predictions.show(200);*/
 		
 		// Evaluate clustering by computing Silhouette score
 		/*ClusteringEvaluator evaluator = new ClusteringEvaluator();
