@@ -1,9 +1,10 @@
 package com.upgrad.saavn;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.ml.clustering.KMeans;
 import org.apache.spark.ml.clustering.KMeansModel;
+import org.apache.spark.ml.feature.StringIndexer;
+import org.apache.spark.ml.feature.VectorAssembler;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -71,9 +72,15 @@ public class App {
 				.drop(datasetdbf.col("user_id"));
 		datasetwithsong.show();	
 		
-		
+		StringIndexer indexer = new StringIndexer()
+				  .setInputCol("song_id")
+				  .setOutputCol("song_id_indexed");
+
+		Dataset<Row> datasetwithsongindexed = indexer.fit(datasetwithsong).transform(datasetwithsong);
+		datasetwithsongindexed.show();
+				
 		VectorAssembler assembler = new VectorAssembler()
-				  .setInputCols(new String[] {"song_id","recency", "frequency","modified_date","last_lisen"}).setOutputCol("features");
+				  .setInputCols(new String[] {"recency", "frequency","last_lisen"}).setOutputCol("features");
 				
 		Dataset<Row> datasetRfm = assembler.transform(datasetwithsong);
 		datasetRfm.show();
@@ -90,7 +97,11 @@ public class App {
 		Dataset<Row> predictionswithArtist = predictions
 				.join(artistDataset, predictions.col("song_id").equalTo(artistDataset.col("song_id")), "inner")
 				.drop(artistDataset.col("song_id"));
-		predictionswithArtist.show();	
+		predictionswithArtist.show();
+		
+		Dataset<Row> distinctValuesDF = predictionswithArtist.select(predictionswithArtist.col("prediction")).distinct();
+		distinctValuesDF.show();
+
 		
 		// Evaluate clustering by computing Silhouette score
 		/*ClusteringEvaluator evaluator = new ClusteringEvaluator();
