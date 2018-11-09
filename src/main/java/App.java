@@ -1,4 +1,4 @@
-package com.upgrad.saavn;
+//package com.upgrad.saavn;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.ml.clustering.KMeans;
@@ -9,6 +9,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.expressions.Window;
+import org.apache.spark.sql.expressions.WindowSpec;
 
 public class App {
 
@@ -26,15 +28,26 @@ public class App {
 			.toDF("user_id","timestamp","song_id","date_col");
 		//rawDataset.show();
 
-		//Load newmetadata -- artist dataset
+		
 		//D:\\cloudera_share\\saavn_ml_project_files\\newmetadata
-		Dataset<Row> artistDataset = spark.read().option("header", "true").csv("C:\\VirtualD\\saavn_ml_project_files\\newmetadata")
+		//C:\\VirtualD\\saavn_ml_project_files\\newmetadata
+		//D:\\cloudera_share\\saavn_ml_project_files\\notification_clicks
+		//D:\\cloudera_share\\saavn_ml_project_files\\notification_actor
+		
+		//Load newmetadata -- artist dataset
+		Dataset<Row> artistDataset = spark.read().option("header", "true").csv("D:\\\\cloudera_share\\\\saavn_ml_project_files\\\\newmetadata")
 			.toDF("song_id","artist_id");
 		artistDataset.show();
 		
-		/*Dataset<Row> datasetFreq = artistDataset.groupBy("song_id").count().groupBy("song_id")
-			.agg(functions.count("*").alias("frequency"));
-		datasetFreq.show();*/
+		//Load new notification -- clicks dataset
+		Dataset<Row> notificationClicks = spark.read().option("header", "true").csv("D:\\\\cloudera_share\\\\saavn_ml_project_files\\\\notification_clicks")
+			.toDF("notification_id","user_id","date_col");
+		notificationClicks.show();
+		
+		//Load new notification -- artist dataset
+		Dataset<Row> notificationArtist = spark.read().option("header", "true").csv("D:\\\\cloudera_share\\\\saavn_ml_project_files\\\\notification_actor")
+			.toDF("notification_id","artist_id");
+		notificationArtist.show();
 		
 		// Ignore rows having null values
 		Dataset<Row> datasetClean = rawDataset.na().drop();
@@ -99,9 +112,27 @@ public class App {
 				.drop(artistDataset.col("song_id"));
 		predictionswithArtist.show();
 		
-		Dataset<Row> distinctValuesDF = predictionswithArtist.select(predictionswithArtist.col("prediction")).distinct();
-		distinctValuesDF.show();
+		/*Dataset<Row> distinctValuesDF = predictionswithArtist.select(predictionswithArtist.col("prediction")).distinct();
+		distinctValuesDF.show();*/
+		
+		/*predictionswithArtist.groupBy(predictionswithArtist.col("prediction")).count();
+		
+		Dataset<Row> predictionswithArtistGrp = predictionswithArtist.groupBy("prediction")
+			.agg(functions.count("artist_id").alias("count"));
+		predictionswithArtistGrp.show();
+*/
+		
+		Dataset<Row> datasetcnt = predictionswithArtist.groupBy("prediction","artist_id").count().orderBy(functions.asc("prediction"),functions.desc("count"));
+		datasetcnt.show();
+		
+		WindowSpec  window = Window.partitionBy("prediction").orderBy(functions.desc("count"));
 
+		Dataset<Row> datasetcntRnk =  datasetcnt.withColumn("rn", functions.row_number().over(window));
+		datasetcntRnk.show();
+		datasetcntRnk.printSchema();
+		
+		Dataset<Row> datasetcntRnkfilterd =  datasetcntRnk.filter(x -> x.getInt(3) == 1);
+		datasetcntRnkfilterd.show();
 		
 		// Evaluate clustering by computing Silhouette score
 		/*ClusteringEvaluator evaluator = new ClusteringEvaluator();
@@ -114,5 +145,6 @@ public class App {
 			System.out.println(center);
 		}*/
 		spark.stop();
+	
 	}
 }	
