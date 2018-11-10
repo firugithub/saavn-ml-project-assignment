@@ -3,8 +3,10 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.spark.ml.clustering.KMeans;
 import org.apache.spark.ml.clustering.KMeansModel;
+import org.apache.spark.ml.evaluation.ClusteringEvaluator;
 import org.apache.spark.ml.feature.StringIndexer;
 import org.apache.spark.ml.feature.VectorAssembler;
+import org.apache.spark.ml.linalg.Vector;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -23,16 +25,15 @@ public class App {
 		// Create a SparkSession
 		SparkSession spark = SparkSession.builder().appName("KMeansCluster").master("local").getOrCreate();
 
-		// Loads data
-		Dataset<Row> rawDataset = spark.read().option("header", "true").csv("Data/")
-			.toDF("user_id","timestamp","song_id","date_col");
-		//rawDataset.show();
-
-		
 		//D:\\cloudera_share\\saavn_ml_project_files\\newmetadata
 		//C:\\VirtualD\\saavn_ml_project_files\\newmetadata
 		//D:\\cloudera_share\\saavn_ml_project_files\\notification_clicks
 		//D:\\cloudera_share\\saavn_ml_project_files\\notification_actor
+
+		
+		// Loads data
+		Dataset<Row> rawDataset = spark.read().option("header", "true").csv("Data/")
+			.toDF("user_id","timestamp","song_id","date_col");
 		
 		//Load newmetadata -- artist dataset
 		Dataset<Row> artistDataset = spark.read().option("header", "true").csv("D:\\\\cloudera_share\\\\saavn_ml_project_files\\\\newmetadata")
@@ -45,9 +46,9 @@ public class App {
 		notificationClicks.show();
 		
 		//Load new notification -- artist dataset
-		Dataset<Row> notificationArtist = spark.read().option("header", "true").csv("D:\\\\cloudera_share\\\\saavn_ml_project_files\\\\notification_actor")
-			.toDF("notification_id","artist_id");
-		notificationArtist.show();
+    		Dataset<Row> artistNotificationDataset = spark.read().option("header", "true").csv("D:\\\\cloudera_share\\\\saavn_ml_project_files\\\\notification_actor")
+    			.toDF("notification_id","artist_id");
+    		artistNotificationDataset.show();
 		
 		// Ignore rows having null values
 		Dataset<Row> datasetClean = rawDataset.na().drop();
@@ -61,8 +62,6 @@ public class App {
 			functions.current_date(),
 			datasetClean.col("modified_date")));
 		datasetdbf.show();
-		
-		
 		
 		
 		// Recency
@@ -107,20 +106,15 @@ public class App {
 		predictions.show(200);
 		
 		
+		Dataset<Row> clusterUsers = predictions.groupBy("prediction")
+			.agg(functions.count("user_id").alias("cluster_user_count"));
+		clusterUsers.show();
+		
 		Dataset<Row> predictionswithArtist = predictions
 				.join(artistDataset, predictions.col("song_id").equalTo(artistDataset.col("song_id")), "inner")
 				.drop(artistDataset.col("song_id"));
 		predictionswithArtist.show();
 		
-		/*Dataset<Row> distinctValuesDF = predictionswithArtist.select(predictionswithArtist.col("prediction")).distinct();
-		distinctValuesDF.show();*/
-		
-		/*predictionswithArtist.groupBy(predictionswithArtist.col("prediction")).count();
-		
-		Dataset<Row> predictionswithArtistGrp = predictionswithArtist.groupBy("prediction")
-			.agg(functions.count("artist_id").alias("count"));
-		predictionswithArtistGrp.show();
-*/
 		
 		Dataset<Row> datasetcnt = predictionswithArtist.groupBy("prediction","artist_id").count().orderBy(functions.asc("prediction"),functions.desc("count"));
 		datasetcnt.show();
@@ -134,8 +128,40 @@ public class App {
 		Dataset<Row> datasetcntRnkfilterd =  datasetcntRnk.filter(x -> x.getInt(3) == 1);
 		datasetcntRnkfilterd.show();
 		
+		//join 
+		
+		Dataset<Row> predWithcluserusers = datasetcntRnkfilterd
+		.join(clusterUsers, datasetcntRnkfilterd.col("prediction").equalTo(clusterUsers.col("prediction")), "inner")
+		.drop(clusterUsers.col("prediction"));
+		predWithcluserusers.show();
+	
+		
+		Dataset<Row> predNotArtistJoined = predWithcluserusers
+			.join(artistNotificationDataset, predWithcluserusers.col("artist_id").equalTo(artistNotificationDataset.col("artist_id")), "inner")
+			.drop(artistNotificationDataset.col("artist_id"));
+		predNotArtistJoined.show();
+		
+		Dataset<Row> notificationclickcnt = notificationClicks.groupBy("notification_id").agg(functions.count("user_id").alias("user_notificaiton_count"));
+		notificationclickcnt.show();
+		
+		Dataset<Row> predNotArtistJoinedwithNotiUsercount = predNotArtistJoined
+			.join(notificationclickcnt, predNotArtistJoined.col("not_id").equalTo(notificationclickcnt.col("not_id")), "inner")
+			.drop(notificationclickcnt.col("not_id"));
+		predNotArtistJoinedwithNotiUsercount.show();
+		
+		Dataset<Row> predictedClusterUserCount = predictions.groupBy("prediction").agg(functions.count("user_id").alias("prediction_user_count"));
+		predictedClusterUserCount.show();
+		
+		Dataset<Row> predNotArtistJoinedwithNotiUsercount1 = predNotArtistJoinedwithNotiUsercount
+			.join(predictedClusterUserCount, predNotArtistJoinedwithNotiUsercount.col("prediction").equalTo(predictedClusterUserCount.col("prediction")), "inner")
+			.drop(predictedClusterUserCount.col("prediction"));
+		predNotArtistJoinedwithNotiUsercount1.show();
+		
+		Dataset<Row> ctr = predNotArtistJoinedwithNotiUsercount1.withColumn("CTR", (predNotArtistJoinedwithNotiUsercount1.col("prediction_user_count").divide(predNotArtistJoinedwithNotiUsercount1.col("user_notificaiton_count"))).multiply(100));
+		ctr.show();
+		
 		// Evaluate clustering by computing Silhouette score
-		/*ClusteringEvaluator evaluator = new ClusteringEvaluator();
+		ClusteringEvaluator evaluator = new ClusteringEvaluator();
 		double silhouette = evaluator.evaluate(predictions);
 		System.out.println("Silhouette with squared euclidean distance = " + silhouette);
 		// Shows the result
@@ -143,7 +169,7 @@ public class App {
 		System.out.println("Cluster Centers: ");
 		for (Vector center : centers) {	
 			System.out.println(center);
-		}*/
+		}
 		spark.stop();
 	
 	}
